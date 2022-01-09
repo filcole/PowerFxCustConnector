@@ -1,6 +1,3 @@
-using System.IO;
-using System.Net;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.WebJobs;
@@ -8,17 +5,18 @@ using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.Azure.WebJobs.Extensions.OpenApi.Core.Attributes;
 using Microsoft.Extensions.Logging;
 using Microsoft.OpenApi.Models;
-using Newtonsoft.Json;
 using Microsoft.PowerFx;
 using Microsoft.PowerFx.Core.Public.Values;
+using Newtonsoft.Json;
 using PowerFxCustConnector.Models;
 using System;
 using System.Collections.Generic;
-using YamlDotNet.RepresentationModel;
+using System.IO;
+using System.Net;
 using System.Text.RegularExpressions;
-using Newtonsoft.Json.Linq;
-using System.Dynamic;
+using System.Threading.Tasks;
 using YamlDotNet.Core;
+using YamlDotNet.RepresentationModel;
 
 namespace PowerFxCustConnector
 {
@@ -81,7 +79,7 @@ namespace PowerFxCustConnector
             _logger.LogInformation($"Processing {formulae.Count} formulae with context: {request.Context}");
 
             // Evaulate each formula in turn, store the result of each formula back in the PowerFx engine
-            // so that it can be used by later formulas.  
+            // so that it can be used by later formulas.
             foreach (var f in formulae)
             {
                 try
@@ -98,7 +96,8 @@ namespace PowerFxCustConnector
             // Note: Integers serialise as decimal numbers, but the Parse Json step in Power Automate will
             // happily converts them back to integers within Power Automate.
             var output = new Dictionary<string, Object>();
-            foreach (var f in formulae) {
+            foreach (var f in formulae)
+            {
                 // Yaml expression may contain a variable multiple times,
                 // but it only needs to be returned once.
                 if (!output.ContainsKey(f.Name))
@@ -106,7 +105,6 @@ namespace PowerFxCustConnector
                     output[f.Name] = engine.GetValue(f.Name).ToObject();
                 }
             }
-
 
             string json = JsonConvert.SerializeObject(output);
             _logger.LogInformation("Successful response: {output}", json);
@@ -127,7 +125,7 @@ namespace PowerFxCustConnector
             // There's room to improve this!
             foreach (var node in yaml.Documents[0].AllNodes)
             {
-                // We're only interested in the mapping nodes, but these may be top-level, or at the bottom 
+                // We're only interested in the mapping nodes, but these may be top-level, or at the bottom
                 // of the tree structure that is Yaml SequenceNodes/MappingNodes.
                 if (node is YamlMappingNode mapping)
                 {
@@ -151,13 +149,12 @@ namespace PowerFxCustConnector
                             }
                         }
                     }
-
                 }
             }
             return formulae;
         }
 
-        // Remove single line comments '//' and multi-line comments /* xxx */ 
+        // Remove single line comments '//' and multi-line comments /* xxx */
         // Thank you https://stackoverflow.com/a/3524689
         private static string RemoveComments(string input)
         {
@@ -182,4 +179,3 @@ namespace PowerFxCustConnector
         }
     }
 }
-
