@@ -41,7 +41,7 @@ foreach (var entry in mapping.Children)
     if (entry.Value is YamlScalarNode)
     {
         var expressionYaml = ((YamlScalarNode)entry.Value).Value;
-        var expression = removeComments(expressionYaml);
+        var expression = removeComments(expressionYaml ?? "");
 
         Console.WriteLine(expression);
 
