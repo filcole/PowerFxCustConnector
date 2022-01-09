@@ -7,10 +7,9 @@ using System.Threading.Tasks;
 
 namespace PowerFxCustConnector.Models
 {
-    public class CalcPowerFxRequestYaml
+    public class RequestBody
     {
-        //[JsonProperty(Required = Required.Always)]
-        public string InputJson { get; set; }
+        public string Context { get; set; }
         public string Yaml { get; set; }
     }
 }

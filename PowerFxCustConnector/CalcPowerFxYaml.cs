@@ -21,6 +21,11 @@ using System.Dynamic;
 
 namespace PowerFxCustConnector
 {
+    internal class Formula
+    {
+        internal string Name { get; set; }
+        internal string Expression { get; set; }
+    }
 
     public class CalcPowerFxYaml
     {
@@ -33,8 +38,8 @@ namespace PowerFxCustConnector
 
         [FunctionName(nameof(CalcPowerFxYaml))]
         [OpenApiOperation(operationId: "CalcPowerFxYaml", tags: new[] { "Calculation" }, Summary = "Calculate PowerFx based on Yaml formulas")]
-        [OpenApiRequestBody(contentType: "application/json", bodyType: typeof(CalcPowerFxRequestYaml), Required = true, Description = "Request parameters and yaml formulas")]
-        [OpenApiResponseWithBody(statusCode: HttpStatusCode.OK, contentType: "application/json", bodyType: typeof(JObject), Description = "Json serialised results")]
+        [OpenApiRequestBody(contentType: "application/json", bodyType: typeof(RequestBody), Required = true, Description = "Request parameters and yaml formulas")]
+        [OpenApiResponseWithBody(statusCode: HttpStatusCode.OK, contentType: "application/json", bodyType: typeof(string), Description = "Json serialised results")]
         public async Task<IActionResult> Run(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = null)] HttpRequest req)
         {
@@ -43,11 +48,11 @@ namespace PowerFxCustConnector
 
             string body = await new StreamReader(req.Body).ReadToEndAsync();
 
-            CalcPowerFxRequestYaml request;
+            RequestBody request;
 
             try
             {
-                request = JsonConvert.DeserializeObject<CalcPowerFxRequestYaml>(body);
+                request = JsonConvert.DeserializeObject<RequestBody>(body);
             }
             catch
             {
@@ -56,7 +61,7 @@ namespace PowerFxCustConnector
 
             var engine = new RecalcEngine();
 
-            var input = (RecordValue)FormulaValue.FromJson(request.InputJson);
+            var input = (RecordValue)FormulaValue.FromJson(request.Context ?? "{}");
 
             // Read the Yaml and parse into a list of variables and expressions
             List<Formula> formulae = GetFormulae(request.Yaml);
@@ -75,28 +80,15 @@ namespace PowerFxCustConnector
                 }
                 catch (System.InvalidOperationException e)
                 {
-                    _logger.LogCritical($"Error InvalidOperationException: {e.Message} on formula {formula.Expression}", e);
-                    throw;
+                    _logger.LogCritical($"Exception InvalidOperationException: {e.Message} on formula '{formula.Expression}'", e);
+                    return new BadRequestObjectResult($"PowerFx error on forumla '{formula.Expression}': {e.Message}");
                 }
             }
 
-            //GetFormulae(request.Yaml).ForEach(formula =>
-            //{
-            //    try
-            //    {
-            //        engine.UpdateVariable(formula.Name, engine.Eval(formula.Expression, input));
-            //    }
-            //    catch (System.InvalidOperationException e)
-            //    {
-            //        _logger.LogCritical("Error InvalidOperationException: {message} on formula {expression}", e.Message, formula.Expression);
-            //        throw;
-            //    }
-            //});
-
-
-            //var output = new ExpandoObject() as IDictionary<string, Object>;
-
             var output = new Dictionary<string, Object>();
+            // FIXME: Handle case where variable is set twice, e.g.
+            //  a: =1
+            //  a: =2
             formulae.ForEach(f => output.Add(f.Name, engine.GetValue(f.Name).ToObject()));
 
             string json = JsonConvert.SerializeObject(output);
@@ -116,26 +108,26 @@ namespace PowerFxCustConnector
             var yaml = new YamlStream();
             yaml.Load(input);
 
-            // Examine the stream
             var mapping = (YamlMappingNode)yaml.Documents[0].RootNode;
 
             foreach (var entry in mapping.Children)
             {
                 var name = ((YamlScalarNode)entry.Key).Value;
 
-                if (entry.Value is YamlScalarNode)
+                if (entry.Value is YamlScalarNode val)
                 {
-                    var expressionYaml = ((YamlScalarNode)entry.Value).Value;
+                    var expressionYaml = val.Value;
                     var expression = RemoveComments(expressionYaml);
 
-                    Console.WriteLine(expression);
+                    _logger.LogDebug("expression: {expression}", expression);
 
                     if (expression.StartsWith("="))
                     {
                         formulae.Add(new Formula
                         {
                            Name = name,
-                           Expression = expression.Substring(1),
+                           // Remove the first character (=)
+                           Expression = expression[1..],
                         });
                     }
                 }
