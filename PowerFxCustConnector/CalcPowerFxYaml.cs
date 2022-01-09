@@ -18,6 +18,7 @@ using YamlDotNet.RepresentationModel;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
 using System.Dynamic;
+using YamlDotNet.Core;
 
 namespace PowerFxCustConnector
 {
@@ -63,33 +64,53 @@ namespace PowerFxCustConnector
 
             var input = (RecordValue)FormulaValue.FromJson(request.Context ?? "{}");
 
-            // Read the Yaml and parse into a list of variables and expressions
-            List<Formula> formulae = GetFormulae(request.Yaml);
+            List<Formula> formulae;
+            try
+            {
+                // Read the Yaml and parse into a list of variables and expressions
+                formulae = GetFormulae(request.Yaml);
+            }
+            catch (YamlException ex)
+            {
+                var errmsg = $"Exception {ex.Message} extracting formula from YAML. Inner exception: {ex.InnerException}";
+                _logger.LogCritical(errmsg);
+                return new BadRequestObjectResult(errmsg);
+            }
 
             // Evaulate each formula in turn, store the result of each formula back in the engine so that it can be used by later formulas
-            foreach (var formula in formulae)
+            foreach (var f in formulae)
             {
                 try
                 {
                     //engine.UpdateVariable(formula.Name, engine.Eval(formula.Expression, input));
                     ////engine.SetFormula(formula.Name, formula.Expression, null);
 
-                    var val = engine.Eval(formula.Expression, input);
+                    var val = engine.Eval(f.Expression, input);
                     
-                    engine.UpdateVariable(formula.Name, val);
+                    engine.UpdateVariable(f.Name, val);
                 }
-                catch (System.InvalidOperationException e)
+                catch (System.InvalidOperationException ex)
                 {
-                    _logger.LogCritical($"Exception InvalidOperationException: {e.Message} on formula '{formula.Expression}'", e);
-                    return new BadRequestObjectResult($"PowerFx error on forumla '{formula.Expression}': {e.Message}");
+                    _logger.LogCritical("Exception InvalidOperationException: {0} on formula '{1}'", ex.Message, f.Expression);
+                    return new BadRequestObjectResult($"PowerFx error on forumla '{f.Expression}': {ex.Message}");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogCritical("Exception: {0} on formula '{1}'", ex.Message, f.Expression);
+                    return new BadRequestObjectResult($"PowerFx error on forumla '{f.Expression}': {ex.Message}");
                 }
             }
 
             var output = new Dictionary<string, Object>();
-            // FIXME: Handle case where variable is set twice, e.g.
-            //  a: =1
-            //  a: =2
-            formulae.ForEach(f => output.Add(f.Name, engine.GetValue(f.Name).ToObject()));
+            foreach (var f in formulae) {
+                // Yaml expression may contain a variable multiple times,
+                // but it only needs to be returned once.
+                if (!output.ContainsKey(f.Name))
+                {
+                    output[f.Name] = engine.GetValue(f.Name).ToObject();
+                }
+            }
+
 
             string json = JsonConvert.SerializeObject(output);
 
@@ -108,31 +129,36 @@ namespace PowerFxCustConnector
             var yaml = new YamlStream();
             yaml.Load(input);
 
-            var mapping = (YamlMappingNode)yaml.Documents[0].RootNode;
-
-            foreach (var entry in mapping.Children)
+            foreach (var node in yaml.Documents[0].AllNodes)
             {
-                var name = ((YamlScalarNode)entry.Key).Value;
-
-                if (entry.Value is YamlScalarNode val)
+                // We're only interested in the mapping nodes, but these may be top-level, or at the bottom 
+                // of the tree structure that is Yaml SequenceNodes/MappingNodes.
+                if (node is YamlMappingNode mapping)
                 {
-                    var expressionYaml = val.Value;
-                    var expression = RemoveComments(expressionYaml);
-
-                    _logger.LogDebug("expression: {expression}", expression);
-
-                    if (expression.StartsWith("="))
+                    foreach (var entry in mapping.Children)
                     {
-                        formulae.Add(new Formula
+                        if (entry.Value is YamlScalarNode val)
                         {
-                           Name = name,
-                           // Remove the first character (=)
-                           Expression = expression[1..],
-                        });
+                            var expression = RemoveComments(val.Value).Trim();
+
+                            _logger.LogDebug("expression: {expression}", expression);
+
+                            if (expression.StartsWith("="))
+                            {
+                                var name = ((YamlScalarNode)entry.Key).Value;
+                                formulae.Add(new Formula
+                                {
+                                    Name = name,
+                                    // Remove the first character (=)
+                                    Expression = expression[1..],
+                                });
+                            }
+                        }
                     }
+
                 }
             }
-            return formulae; 
+            return formulae;
         }
 
         // Thank you https://stackoverflow.com/a/3524689
