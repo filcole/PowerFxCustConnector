@@ -36,6 +36,7 @@ namespace PowerFxCustConnector
             _logger.LogInformation("C# HTTP trigger function processed a request.");
 
             string json = await new StreamReader(req.Body).ReadToEndAsync();
+            _logger.LogDebug("inputjson={json}", json);
 
             CalcPowerFxRequest request;
 
@@ -48,13 +49,14 @@ namespace PowerFxCustConnector
                 return new BadRequestResult();
             }
 
+
             var engine = new RecalcEngine();
 
             var input = (RecordValue)FormulaValue.FromJson(request.InputJson);
 
             FormulaValue value;
 
-            var formulaFx = request.Rules[0].Formula;
+            var formulaFx = request.Formulas[0].Expression;
             try
             {
                 
