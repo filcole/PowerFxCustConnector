@@ -37,9 +37,9 @@ namespace PowerFxCustConnector
         }
 
         [FunctionName(nameof(CalcPowerFxYaml))]
-        [OpenApiOperation(operationId: "CalcPowerFxYaml", tags: new[] { "Calculation" }, Summary = "Calculate PowerFx based on Yaml formulas")]
+        [OpenApiOperation(operationId: "CalcPowerFxYaml", tags: new[] { "Calculation" }, Description = "Calculate one or more PowerFx expressions with an optionally provided context using the Microsoft.PowerFx library", Summary = "Calculate PowerFx formulae")]
         [OpenApiRequestBody(contentType: "application/json", bodyType: typeof(RequestBody), Required = true, Description = "Request parameters and yaml formulas")]
-        [OpenApiResponseWithBody(statusCode: HttpStatusCode.OK, contentType: "application/json", bodyType: typeof(string), Description = "Json serialised results")]
+        [OpenApiResponseWithBody(statusCode: HttpStatusCode.OK, contentType: "application/json", bodyType: typeof(string), Description = "Json serialised results", Summary = "Evaluated formulae")]
         public async Task<IActionResult> Run(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = null)] HttpRequest req)
         {

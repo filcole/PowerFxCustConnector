@@ -18,7 +18,7 @@ namespace PowerFxCustConnector
 
     {
         [FunctionName(nameof(ListFunctions))]
-        [OpenApiOperation(operationId: "ListFunctions", tags: new[] { "Info" }, Summary = "List available functions")]
+        [OpenApiOperation(operationId: "ListFunctions", tags: new[] { "Info" }, Description = "List functions", Summary = "List subset of available Canvas/PowerFx functions exposed by Microsoft.PowerFx"), ]
         [OpenApiResponseWithBody(statusCode: HttpStatusCode.OK, contentType: "application/json", bodyType: typeof(string[]), Description = "The available functions exposed by the PowerFx interpreter")]
         public IActionResult Run(
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = null)] HttpRequest req)
