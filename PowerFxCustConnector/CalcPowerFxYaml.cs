@@ -44,9 +44,6 @@ namespace PowerFxCustConnector
         public async Task<IActionResult> Run(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = null)] HttpRequest req)
         {
-            // FIXME: Improve logging per youtube vid
-            _logger.LogInformation("Triggered CalcPowerFxYaml");
-
             string body = await new StreamReader(req.Body).ReadToEndAsync();
 
             RequestBody request;
@@ -55,15 +52,19 @@ namespace PowerFxCustConnector
             {
                 request = JsonConvert.DeserializeObject<RequestBody>(body);
             }
-            catch
+            catch (Exception ex)
             {
-                return new BadRequestResult();
+                _logger.LogError("Could not deserialize request: {0}", ex.Message);
+                return new BadRequestObjectResult($"Could not deserialise request");
             }
 
+            // Instantiate (Fire up) the PowerFx engine!!
             var engine = new RecalcEngine();
 
+            // We may be passed a JSON context, but if it's not passed then create an empty object.
             var input = (RecordValue)FormulaValue.FromJson(request.Context ?? "{}");
 
+            // Try and get the list of formuale from the passed Yaml
             List<Formula> formulae;
             try
             {
@@ -73,34 +74,29 @@ namespace PowerFxCustConnector
             catch (YamlException ex)
             {
                 var errmsg = $"Exception {ex.Message} extracting formula from YAML. Inner exception: {ex.InnerException}";
-                _logger.LogCritical(errmsg);
+                _logger.LogWarning(errmsg);
                 return new BadRequestObjectResult(errmsg);
             }
 
-            // Evaulate each formula in turn, store the result of each formula back in the engine so that it can be used by later formulas
+            _logger.LogInformation($"Processing {formulae.Count} formulae with context: {request.Context}");
+
+            // Evaulate each formula in turn, store the result of each formula back in the PowerFx engine
+            // so that it can be used by later formulas.  
             foreach (var f in formulae)
             {
                 try
                 {
-                    //engine.UpdateVariable(formula.Name, engine.Eval(formula.Expression, input));
-                    ////engine.SetFormula(formula.Name, formula.Expression, null);
-
-                    var val = engine.Eval(f.Expression, input);
-                    
-                    engine.UpdateVariable(f.Name, val);
-                }
-                catch (System.InvalidOperationException ex)
-                {
-                    _logger.LogCritical("Exception InvalidOperationException: {0} on formula '{1}'", ex.Message, f.Expression);
-                    return new BadRequestObjectResult($"PowerFx error on forumla '{f.Expression}': {ex.Message}");
+                    engine.UpdateVariable(f.Name, engine.Eval(f.Expression, input));
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogCritical("Exception: {0} on formula '{1}'", ex.Message, f.Expression);
+                    _logger.LogWarning("Exception: {0} on formula '{1}'", ex.Message, f.Expression);
                     return new BadRequestObjectResult($"PowerFx error on forumla '{f.Expression}': {ex.Message}");
                 }
             }
 
+            // Note: Integers serialise as decimal numbers, but the Parse Json step in Power Automate will
+            // happily converts them back to integers within Power Automate.
             var output = new Dictionary<string, Object>();
             foreach (var f in formulae) {
                 // Yaml expression may contain a variable multiple times,
@@ -113,22 +109,22 @@ namespace PowerFxCustConnector
 
 
             string json = JsonConvert.SerializeObject(output);
-
-            _logger.LogInformation("Output={output}", json);
+            _logger.LogInformation("Successful response: {output}", json);
 
             return new OkObjectResult(json);
         }
 
+        // Build a list of forumlae from the Yaml that's passed to the function
         private List<Formula> GetFormulae(string formulaYaml)
         {
+            // Read and parse the Yaml
+            var yaml = new YamlStream();
+            yaml.Load(new StringReader(formulaYaml));
+
             var formulae = new List<Formula>();
 
-            var input = new StringReader(formulaYaml);
-
-            // Load the stream
-            var yaml = new YamlStream();
-            yaml.Load(input);
-
+            // Fetch all nodes, it's simpler than trying to navigate the tree structure.
+            // There's room to improve this!
             foreach (var node in yaml.Documents[0].AllNodes)
             {
                 // We're only interested in the mapping nodes, but these may be top-level, or at the bottom 
@@ -141,7 +137,7 @@ namespace PowerFxCustConnector
                         {
                             var expression = RemoveComments(val.Value).Trim();
 
-                            _logger.LogDebug("expression: {expression}", expression);
+                            _logger.LogInformation("expression: {expression}", expression);
 
                             if (expression.StartsWith("="))
                             {
@@ -161,6 +157,7 @@ namespace PowerFxCustConnector
             return formulae;
         }
 
+        // Remove single line comments '//' and multi-line comments /* xxx */ 
         // Thank you https://stackoverflow.com/a/3524689
         private static string RemoveComments(string input)
         {
