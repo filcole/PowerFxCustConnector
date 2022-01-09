@@ -23,6 +23,9 @@ namespace PowerFxCustConnector
         public IActionResult Run(
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = null)] HttpRequest req)
         {
+            // To remove variable not used warning;
+            _ = req;
+
             var engine = new RecalcEngine();
 
             return new OkObjectResult(engine.GetAllFunctionNames());
