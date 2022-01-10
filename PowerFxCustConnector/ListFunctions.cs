@@ -5,6 +5,7 @@ using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.Azure.WebJobs.Extensions.OpenApi.Core.Attributes;
 using Microsoft.OpenApi.Models;
 using Microsoft.PowerFx;
+using System.Linq;
 using System.Net;
 
 namespace PowerFxCustConnector
@@ -23,7 +24,7 @@ namespace PowerFxCustConnector
 
             var engine = new RecalcEngine();
 
-            return new OkObjectResult(engine.GetAllFunctionNames());
+            return new OkObjectResult(engine.GetAllFunctionNames().Distinct().OrderBy(x => x));
         }
     }
 }
