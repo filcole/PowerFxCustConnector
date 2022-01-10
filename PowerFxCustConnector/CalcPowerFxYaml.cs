@@ -106,7 +106,8 @@ namespace PowerFxCustConnector
                 }
             }
 
-            string json = JsonConvert.SerializeObject(output);
+            // Format the output so that it's easier to see in Power Automate.
+            string json = JsonConvert.SerializeObject(output, Formatting.Indented);
             _logger.LogInformation("Successful response: {output}", json);
 
             return new OkObjectResult(json);
