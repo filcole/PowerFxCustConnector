@@ -76,7 +76,11 @@ namespace PowerFxCustConnector
                 return new BadRequestObjectResult(errmsg);
             }
 
-            _logger.LogInformation($"Processing {formulae.Count} formulae with context: {request.Context}");
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation("Processing {0} formulae with context: {1}", formulae.Count, request.Context);
+            }
+
 
             // Evaulate each formula in turn, store the result of each formula back in the PowerFx engine
             // so that it can be used by later formulas.
@@ -108,7 +112,11 @@ namespace PowerFxCustConnector
 
             // Format the output so that it's easier to see in Power Automate.
             string json = JsonConvert.SerializeObject(output, Formatting.Indented);
-            _logger.LogInformation("Successful response: {output}", json);
+
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation("Successful response: {output}", json);
+            }
 
             return new OkObjectResult(json);
         }
@@ -136,7 +144,10 @@ namespace PowerFxCustConnector
                         {
                             var expression = RemoveComments(val.Value).Trim();
 
-                            _logger.LogInformation("expression: {expression}", expression);
+                            if (_logger.IsEnabled(LogLevel.Information))
+                            {
+                                _logger.LogInformation("expression: {expression}", expression);
+                            }
 
                             if (expression.StartsWith("="))
                             {
