@@ -175,7 +175,8 @@ namespace PowerFxCustConnector
                     // Keep the literal strings
                     return me.Value;
                 },
-                RegexOptions.Singleline
+                RegexOptions.Singleline,
+                TimeSpan.FromMilliseconds(250)
             );
         }
     }
